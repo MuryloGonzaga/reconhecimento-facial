@@ -3,7 +3,7 @@ from PIL import Image
 import os
 import datetime
 import random
-import shutil # Para manipulação de pastas
+import shutil
 from gerador_retrato import gerar_retrato
 from reconhecimento import treinar_e_reconhecer_top5
 
@@ -11,6 +11,7 @@ class AppRetratoFalado(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Sistema de Perícia Forense - Projeto A3")
+        # Forço o programa a abrir maximizado pra ter imersão de software de verdade
         self.after(0, lambda: self.state('zoomed')) 
         
         self.dir_atual = os.path.dirname(os.path.abspath(__file__))
@@ -20,7 +21,7 @@ class AppRetratoFalado(ctk.CTk):
         self.pasta_suspeitos = os.path.join(self.dir_atual, '..', 'suspeitos_encontrados')
         self.manequim_universal = os.path.join(self.pasta_assets, 'faces', 'rosto_base_universal.png')
 
-        # Layout Proporcional
+        # Dividi a tela usando peso: 40% pra galeria de peças (esquerda), 60% pro rosto montado (direita)
         self.grid_columnconfigure(0, weight=4) 
         self.grid_columnconfigure(1, weight=6) 
         self.grid_rowconfigure(0, weight=1) 
@@ -39,6 +40,7 @@ class AppRetratoFalado(ctk.CTk):
         self.tabview = ctk.CTkTabview(self.frame_menu)
         self.tabview.pack(padx=20, pady=10, fill="both", expand=True)
         
+        # Leio o manequim uma vez só pra usar de "fundo" em todas as miniaturas
         img_manequim_base = Image.open(self.manequim_universal).convert("RGBA")
         
         img_crop_vazio = img_manequim_base.crop((50, 20, 350, 380)) 
@@ -51,10 +53,13 @@ class AppRetratoFalado(ctk.CTk):
             
             caminho = os.path.join(self.pasta_assets, p)
             opcoes = [f for f in os.listdir(caminho) if f.endswith('.png')] if os.path.exists(caminho) else []
+            
+            # Embaralho as opções no boot pra forçar a testemunha a olhar tudo, evitando viés cognitivo
             random.shuffle(opcoes)
             
             scroll = ctk.CTkScrollableFrame(aba)
             scroll.pack(fill="both", expand=True)
+            # Crio 4 colunas com o mesmo peso pra imitar um "display: flex" do CSS
             scroll.grid_columnconfigure((0,1,2,3), weight=1)
             
             btn_vazio = ctk.CTkButton(
@@ -65,6 +70,7 @@ class AppRetratoFalado(ctk.CTk):
             btn_vazio.grid(row=0, column=0, padx=10, pady=10)
             
             for i, arquivo in enumerate(opcoes, 1):
+                # Carrego a peça, colo no manequim cinza e corto pra gerar o thumbnail vertical
                 img_p = Image.open(os.path.join(caminho, arquivo)).convert("RGBA")
                 img_c = Image.alpha_composite(img_manequim_base, img_p).crop((50, 20, 350, 380))
                 img_tk = ctk.CTkImage(light_image=img_c.resize((90, 108)), size=(90, 108))
@@ -115,12 +121,12 @@ class AppRetratoFalado(ctk.CTk):
         
         ranking = treinar_e_reconhecer_top5(self.caminho_dataset, self.caminho_saida)
         
-        # 1. FAXINA: Limpa a pasta de suspeitos
+        # Passo 1 (Exportação Ética): Limpo a pasta pra não misturar os suspeitos da investigação atual com os antigos
         if os.path.exists(self.pasta_suspeitos):
             shutil.rmtree(self.pasta_suspeitos)
         os.makedirs(self.pasta_suspeitos)
 
-        # 2. EXPORTAÇÃO: Salva as fotos PGM como PNG na pasta
+        # Passo 2: O Pillow converte direto de .pgm para .png e eu salvo com o nome do ranking
         for i, (nome_pasta, dist) in enumerate(ranking, 1):
             caminho_origem = os.path.join(self.caminho_dataset, nome_pasta, '1.pgm')
             if os.path.exists(caminho_origem):
@@ -128,7 +134,7 @@ class AppRetratoFalado(ctk.CTk):
                 nome_final = f"{i}_lugar_suspeito_{nome_pasta.replace('s','')}.png"
                 img_suspeito.save(os.path.join(self.pasta_suspeitos, nome_final))
 
-        # 3. RELATÓRIO: Gera o laudo técnico
+        # Passo 3: Geração do documento oficial TXT (Ocultando o resultado da UI pra não criar viés na testemunha)
         caminho_relatorio = os.path.join(self.dir_atual, '..', 'relatorio_forense.txt')
         with open(caminho_relatorio, 'w', encoding='utf-8') as f:
             f.write(f"RELATÓRIO FORENSE - {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}\n")

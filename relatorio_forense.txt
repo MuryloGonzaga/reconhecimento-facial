@@ -1,12 +1,12 @@
-RELATÓRIO FORENSE - 22/04/2026 02:14
+RELATÓRIO FORENSE - 22/04/2026 12:08
 --------------------------------------------------
-Olhos: olhos_sujeito_01.png
-Nariz: nariz_sujeito_03.png
-Boca:  boca_sujeito_06.png
+Olhos: olhos_sujeito_21.png
+Nariz: nariz_sujeito_33.png
+Boca:  boca_sujeito_21.png
 
 RANKING DE SIMILARIDADE:
- 1º Lugar: Suspeito 6 (Dist: 47.56)
- 2º Lugar: Suspeito 30 (Dist: 49.13)
- 3º Lugar: Suspeito 21 (Dist: 49.74)
- 4º Lugar: Suspeito 18 (Dist: 51.63)
- 5º Lugar: Suspeito 40 (Dist: 51.94)
+ 1º Lugar: Suspeito 21 (Dist: 31.53)
+ 2º Lugar: Suspeito 18 (Dist: 46.73)
+ 3º Lugar: Suspeito 33 (Dist: 47.06)
+ 4º Lugar: Suspeito 40 (Dist: 47.71)
+ 5º Lugar: Suspeito 30 (Dist: 48.02)
