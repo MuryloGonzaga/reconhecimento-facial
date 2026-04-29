@@ -13,7 +13,7 @@ Trabalho acadêmico desenvolvido para a unidade curricular de Computação Gráf
 5. **Exportação Ética (Blind Test):** Para evitar viés de confirmação testemunhal, a interface não exibe os resultados da IA. O sistema gera um Laudo Técnico Automático (`relatorio_forense.txt`) e converte/exporta as fotos originais (`.pgm`) do Top 5 suspeitos para uma pasta segura em `.png`.
 
 ## Tecnologias Utilizadas
-* **Linguagem:** Python 3.x
+* **Linguagem:** Python 3.14.4
 * **Visão Computacional e ML:** OpenCV (Haar Cascades, Filtros CLAHE/Gaussian, LBPHFaceRecognizer).
 * **Computação Gráfica:** Pillow (Manipulação Avançada de Máscaras e Canal Alpha).
 * **Interface Gráfica:** CustomTkinter.
