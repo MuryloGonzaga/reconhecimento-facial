@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FORENSE // Sistema de Reconhecimento Facial</title>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg0:    #080a0c;
+      --bg1:    #0d1014;
+      --bg2:    #12161b;
+      --bg3:    #181d24;
+      --red:    #cc1f1f;
+      --red2:   #ff2b2b;
+      --amber:  #e8a020;
+      --green:  #1aab5a;
+      --text0:  #dde3ec;
+      --text1:  #7a8899;
+      --text2:  #3a4555;
+      --border: rgba(204,31,31,0.15);
+      --border2:rgba(204,31,31,0.35);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg0);
+      color: var(--text0);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      overflow: hidden;
+    }
+
+    /* linhas de monitor CRT */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px
+      );
+      pointer-events: none;
+      z-index: 998;
+    }
+
+    /* ── LAYOUT ── */
+    #app {
+      position: relative;
+      z-index: 1;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 58px 1fr;
+      grid-template-columns: 320px 1fr;
+      grid-template-areas:
+        "header header"
+        "left   center";
+    }
+
+    /* ════════════════ HEADER ════════════════ */
+    #header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      border-bottom: 2px solid var(--red);
+      background: var(--bg1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #header::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--red2);
+      animation: alerta 2s ease-in-out infinite;
+    }
+
+    @keyframes alerta { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+    .brasao {
+      width: 58px;
+      height: 58px;
+      background: var(--red);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brasao-estrela {
+      width: 24px;
+      height: 24px;
+      background: white;
+      clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+    }
+
+    .header-bloco {
+      padding: 0 18px;
+      border-right: 1px solid var(--border2);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .header-dept {
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.08em;
+      color: var(--text0);
+      line-height: 1;
+    }
+
+    .header-sub {
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      color: var(--text1);
+      margin-top: 3px;
+      text-transform: uppercase;
+    }
+
+    .header-info { padding: 0 18px; display: flex; flex-direction: column; gap: 3px; }
+    .header-info span { font-size: 9px; letter-spacing: 0.12em; color: var(--text2); text-transform: uppercase; }
+    .header-info strong { color: var(--amber); font-weight: normal; }
+
+    .alerta-badge {
+      margin-left: auto;
+      margin-right: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border: 1px solid var(--red);
+      background: rgba(204,31,31,0.08);
+    }
+
+    .alerta-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--red2);
+      animation: alerta 1s ease-in-out infinite;
+    }
+
+    .alerta-txt {
+      font-family: 'Oswald', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      color: var(--red2);
+      text-transform: uppercase;
+    }
+
+    #session-clock { margin-right: 20px; font-size: 13px; color: var(--amber); letter-spacing: 0.1em; }
+
+    /* ════════════════ PAINEL ESQUERDO ════════════════ */
+    #left {
+      grid-area: left;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border2);
+      background: var(--bg1);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border2);
+      background: var(--bg2);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-header-txt {
+      font-family: 'Oswald', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      color: var(--text1);
+      text-transform: uppercase;
+    }
+
+    .panel-header-linha { flex: 1; height: 1px; background: var(--border2); }
+
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border2);
+      background: var(--bg1);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px 0;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      font-family: 'Oswald', sans-serif;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text2);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tab:hover { color: var(--text1); }
+    .tab.ativo { color: var(--red2); border-bottom-color: var(--red2); }
+
+    .tab-content {
+      display: none;
+      overflow-y: auto;
+      flex: 1;
+      padding: 10px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      align-content: start;
+    }
+
+    .tab-content.ativo { display: grid; }
+    .tab-content::-webkit-scrollbar { width: 3px; }
+    .tab-content::-webkit-scrollbar-thumb { background: var(--border2); }
+
+    .thumb {
+      aspect-ratio: 3/4;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      cursor: pointer;
+      background: var(--bg2);
+      transition: border-color 0.15s, transform 0.1s;
+      position: relative;
+    }
+
+    .thumb:hover { border-color: var(--border2); transform: scale(1.04); }
+
+    .thumb.selecionado {
+      border-color: var(--red);
+      box-shadow: 0 0 0 1px var(--red), 0 0 8px rgba(204,31,31,0.25);
+    }
+
+    .thumb img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      display: block;
+      filter: grayscale(40%) brightness(0.8);
+      transition: filter 0.15s;
+    }
+
+    .thumb:hover img, .thumb.selecionado img { filter: grayscale(10%) brightness(1); }
+
+    .thumb.selecionado::after {
+      content: '✓';
+      position: absolute;
+      top: 3px; right: 4px;
+      font-size: 9px;
+      color: var(--red2);
+    }
+
+    .thumb-vazio {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 4px;
+      color: var(--text2);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+    }
+
+    .thumb-vazio-x { width: 14px; height: 14px; position: relative; }
+
+    .thumb-vazio-x::before, .thumb-vazio-x::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 0;
+      width: 100%; height: 1.5px;
+      background: var(--text2);
+    }
+
+    .thumb-vazio-x::before { transform: translateY(-50%) rotate(45deg); }
+    .thumb-vazio-x::after  { transform: translateY(-50%) rotate(-45deg); }
+
+    /* ════════════════ CENTRO ════════════════ */
+    #center {
+      grid-area: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding: 24px;
+      background: var(--bg0);
+      position: relative;
+    }
+
+    /* timestamp câmera de segurança */
+    .cam-overlay {
+      position: absolute;
+      top: 14px; left: 18px;
+      font-size: 11px;
+      color: rgba(232,160,32,0.65);
+      letter-spacing: 0.08em;
+      pointer-events: none;
+    }
+
+    .cam-overlay-br {
+      position: absolute;
+      bottom: 14px; right: 18px;
+      font-size: 10px;
+      color: rgba(204,31,31,0.5);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    .retrato-wrap { position: relative; z-index: 1; }
+
+    .retrato-frame {
+      width: 340px; height: 340px;
+      position: relative;
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+    }
+
+    .retrato-frame img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .corner {
+      position: absolute;
+      width: 16px; height: 16px;
+      border-color: var(--red);
+      border-style: solid;
+    }
+
+    .corner.tl { top: -1px;    left: -1px;  border-width: 2px 0 0 2px; }
+    .corner.tr { top: -1px;    right: -1px; border-width: 2px 2px 0 0; }
+    .corner.bl { bottom: -1px; left: -1px;  border-width: 0 0 2px 2px; }
+    .corner.br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+    .scan-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--red2), transparent);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .scan-line.ativo { animation: scan 1.8s ease-in-out infinite; }
+
+    @keyframes scan {
+      0%   { top: 0%;   opacity: 0; }
+      5%   { opacity: 0.8; }
+      95%  { opacity: 0.8; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    .status-chips { display: flex; gap: 6px; z-index: 1; }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text2);
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .chip.preenchido { border-color: var(--red); color: var(--red2); }
+
+    .chip-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--text2);
+      flex-shrink: 0;
+    }
+
+    .chip.preenchido .chip-dot { background: var(--red2); }
+
+    #btn-laudo {
+      z-index: 1;
+      width: 340px;
+      padding: 15px 0;
+      background: var(--red);
+      border: none;
+      font-family: 'Oswald', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: white;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #btn-laudo:hover   { background: var(--red2); }
+    #btn-laudo:active  { transform: scale(0.99); }
+    #btn-laudo:disabled { background: var(--bg3); color: var(--text2); cursor: not-allowed; }
+
+    #msg-enviado {
+      display: none;
+      width: 340px;
+      padding: 12px 16px;
+      border: 1px solid var(--green);
+      background: rgba(26,171,90,0.08);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--green);
+      text-align: center;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <header id="header">
+    <div class="brasao"><div class="brasao-estrela"></div></div>
+    <div class="header-bloco">
+      <div class="header-dept">FORENSE<span>SYS</span></div>
+      <div class="header-sub">Reconhecimento Facial / AT&amp;T ORL Database</div>
+    </div>
+    <div class="header-bloco" style="border-right:none;">
+      <div class="header-info">
+        <span>Módulo: <strong>Composição de Retrato Falado</strong></span>
+        <span>Terminal: <strong>Testemunha</strong></span>
+      </div>
+    </div>
+    <div class="alerta-badge">
+      <div class="alerta-dot"></div>
+      <span class="alerta-txt">Sistema Ativo</span>
+    </div>
+    <span id="session-clock">--:--:--</span>
+  </header>
+
+  <aside id="left">
+    <div class="panel-header">
+      <span class="panel-header-txt">Biblioteca Facial</span>
+      <div class="panel-header-linha"></div>
+    </div>
+    <div class="tab-bar">
+      <button class="tab ativo" onclick="mudarAba('olhos', this)">Olhos</button>
+      <button class="tab"       onclick="mudarAba('nariz', this)">Nariz</button>
+      <button class="tab"       onclick="mudarAba('boca',  this)">Boca</button>
+    </div>
+    <div class="tab-content ativo" id="tab-olhos">
+      <div class="thumb thumb-vazio selecionado" id="vazio-olhos" onclick="selecionarPeca('olhos','Nenhum',this)">
+        <div class="thumb-vazio-x"></div><span>vazio</span>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-nariz">
+      <div class="thumb thumb-vazio selecionado" id="vazio-nariz" onclick="selecionarPeca('nariz','Nenhum',this)">
+        <div class="thumb-vazio-x"></div><span>vazio</span>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-boca">
+      <div class="thumb thumb-vazio selecionado" id="vazio-boca" onclick="selecionarPeca('boca','Nenhum',this)">
+        <div class="thumb-vazio-x"></div><span>vazio</span>
+      </div>
+    </div>
+  </aside>
+
+  <main id="center">
+    <div class="cam-overlay" id="cam-ts">-- / -- / ----  --:--:--</div>
+    <div class="cam-overlay-br">CAM-01 // REC ●</div>
+
+    <div class="retrato-wrap">
+      <div class="retrato-frame">
+        <img id="retrato-img" src="" alt="retrato"/>
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+        <div class="scan-line" id="scan-line"></div>
+      </div>
+    </div>
+
+    <div class="status-chips">
+      <div class="chip" id="chip-olhos"><div class="chip-dot"></div><span id="chip-olhos-txt">Olhos</span></div>
+      <div class="chip" id="chip-nariz"><div class="chip-dot"></div><span id="chip-nariz-txt">Nariz</span></div>
+      <div class="chip" id="chip-boca" ><div class="chip-dot"></div><span id="chip-boca-txt" >Boca</span></div>
+    </div>
+
+    <button id="btn-laudo" onclick="reconhecer()">▶ &nbsp; Enviar para Investigação</button>
+    <div id="msg-enviado">✔ &nbsp; Laudo enviado ao investigador com sucesso</div>
+  </main>
+
+</div>
+<script>
+  var selecao = { olhos: 'Nenhum', nariz: 'Nenhum', boca: 'Nenhum' }
+
+  var dados = {
+    olhos: {{ olhos | tojson }},
+    nariz: {{ nariz | tojson }},
+    boca:  {{ boca  | tojson }}
+  }
+
+  function atualizarRelogio() {
+    var agora = new Date()
+    document.getElementById('session-clock').textContent = agora.toLocaleTimeString('pt-BR')
+    document.getElementById('cam-ts').textContent =
+      agora.toLocaleDateString('pt-BR') + '   ' + agora.toLocaleTimeString('pt-BR')
+  }
+  setInterval(atualizarRelogio, 1000)
+  atualizarRelogio()
+
+  function carregarGaleria() {
+    ['olhos', 'nariz', 'boca'].forEach(function(parte) {
+      var container = document.getElementById('tab-' + parte)
+      dados[parte].forEach(function(arquivo) {
+        var thumb = document.createElement('div')
+        thumb.className = 'thumb'
+        thumb.onclick = function() { selecionarPeca(parte, arquivo, thumb) }
+        var img = document.createElement('img')
+        img.src = '/assets/' + parte + '/' + arquivo
+        img.alt = arquivo
+        thumb.appendChild(img)
+        container.appendChild(thumb)
+      })
+    })
+    atualizarRetrato()
+  }
+
+  function mudarAba(parte, btn) {
+    document.querySelectorAll('.tab').forEach(function(b) { b.classList.remove('ativo') })
+    document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('ativo') })
+    btn.classList.add('ativo')
+    document.getElementById('tab-' + parte).classList.add('ativo')
+  }
+
+  function selecionarPeca(parte, arquivo, thumbClicado) {
+    selecao[parte] = arquivo
+    document.getElementById('tab-' + parte)
+      .querySelectorAll('.thumb').forEach(function(t) { t.classList.remove('selecionado') })
+    thumbClicado.classList.add('selecionado')
+
+    var chip = document.getElementById('chip-' + parte)
+    var txt  = document.getElementById('chip-' + parte + '-txt')
+    if (arquivo === 'Nenhum') {
+      chip.classList.remove('preenchido')
+      txt.textContent = parte.charAt(0).toUpperCase() + parte.slice(1)
+    } else {
+      chip.classList.add('preenchido')
+      var num = arquivo.match(/\d+/)
+      txt.textContent = parte.charAt(0).toUpperCase() + parte.slice(1) + ' #' + (num ? num[0] : '')
+    }
+    atualizarRetrato()
+  }
+
+  function atualizarRetrato() {
+    fetch('/gerar-retrato', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(selecao)
+    })
+    .then(function(r) { return r.json() })
+    .then(function(d) { document.getElementById('retrato-img').src = d.retrato_url })
+  }
+
+  function reconhecer() {
+    var btn  = document.getElementById('btn-laudo')
+    var msg  = document.getElementById('msg-enviado')
+    var scan = document.getElementById('scan-line')
+
+    btn.disabled = true
+    btn.textContent = '... Processando biometria'
+    msg.style.display = 'none'
+    scan.classList.add('ativo')
+
+    fetch('/reconhecer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(selecao)
+    })
+    .then(function(r) { return r.json() })
+    .then(function() {
+      scan.classList.remove('ativo')
+      btn.disabled = false
+      btn.innerHTML = '▶ &nbsp; Enviar para Investigação'
+      msg.style.display = 'block'
+    })
+    .catch(function() {
+      scan.classList.remove('ativo')
+      btn.disabled = false
+      btn.innerHTML = '▶ &nbsp; Enviar para Investigação'
+    })
+  }
+
+  carregarGaleria()
+</script>
+</body>
+</html>

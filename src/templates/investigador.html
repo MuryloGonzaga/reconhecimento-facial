@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FORENSE // Painel do Investigador</title>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg0:    #080a0c;
+      --bg1:    #0d1014;
+      --bg2:    #12161b;
+      --bg3:    #181d24;
+      --red:    #cc1f1f;
+      --red2:   #ff2b2b;
+      --amber:  #e8a020;
+      --green:  #1aab5a;
+      --text0:  #dde3ec;
+      --text1:  #7a8899;
+      --text2:  #3a4555;
+      --border: rgba(204,31,31,0.15);
+      --border2:rgba(204,31,31,0.35);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg0);
+      color: var(--text0);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+    }
+
+    /* linhas CRT */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px
+      );
+      pointer-events: none;
+      z-index: 998;
+    }
+
+    /* marca d'água CONFIDENCIAL diagonal */
+    body::after {
+      content: 'CONFIDENCIAL';
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) rotate(-35deg);
+      font-family: 'Oswald', sans-serif;
+      font-size: 120px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: rgba(204,31,31,0.04);
+      pointer-events: none;
+      z-index: 997;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    /* ════════════════ HEADER ════════════════ */
+    #header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      height: 58px;
+      border-bottom: 2px solid var(--red);
+      background: var(--bg1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #header::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--red2);
+      animation: alerta 2s ease-in-out infinite;
+    }
+
+    @keyframes alerta { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+    .brasao {
+      width: 58px; height: 58px;
+      background: var(--red);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brasao-estrela {
+      width: 24px; height: 24px;
+      background: white;
+      clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+    }
+
+    .header-bloco {
+      padding: 0 18px;
+      border-right: 1px solid var(--border2);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .header-dept {
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.08em;
+      line-height: 1;
+    }
+
+    .header-sub { font-size: 9px; letter-spacing: 0.18em; color: var(--text1); margin-top: 3px; text-transform: uppercase; }
+
+    .badge-investigador {
+      padding: 5px 14px;
+      border: 1px solid var(--amber);
+      background: rgba(232,160,32,0.08);
+      font-family: 'Oswald', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      color: var(--amber);
+      text-transform: uppercase;
+      margin-left: 18px;
+    }
+
+    /* status de conexão */
+    #conn-status {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-right: 16px;
+    }
+
+    .conn-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text2);
+      transition: background 0.3s;
+    }
+
+    .conn-dot.conectado  { background: var(--green); animation: pulse-green 2s infinite; }
+    .conn-dot.aguardando { background: var(--amber); }
+    .conn-dot.erro       { background: var(--red2); }
+
+    @keyframes pulse-green {
+      0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(26,171,90,0.4); }
+      50%     { opacity:0.7; box-shadow: 0 0 0 4px rgba(26,171,90,0); }
+    }
+
+    .conn-txt { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text2); transition: color 0.3s; }
+    .conn-txt.conectado  { color: var(--green); }
+    .conn-txt.aguardando { color: var(--amber); }
+    .conn-txt.erro       { color: var(--red2); }
+
+    .sep { width: 1px; height: 20px; background: var(--border2); margin: 0 10px; }
+
+    #session-clock { font-size: 13px; color: var(--amber); letter-spacing: 0.08em; margin-right: 20px; }
+
+    /* ════════════════ CONTEÚDO ════════════════ */
+    #main {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 24px 60px;
+    }
+
+    /* classificação no topo */
+    .classificacao {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border2);
+    }
+
+    .class-tag {
+      font-family: 'Oswald', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      padding: 4px 12px;
+      border: 1px solid var(--red);
+      color: var(--red2);
+      text-transform: uppercase;
+    }
+
+    .class-linha { flex: 1; height: 1px; background: var(--border); }
+
+    .class-num { font-size: 9px; letter-spacing: 0.15em; color: var(--text2); }
+
+    /* banner de aguardando */
+    #banner-aguardando {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 80px 0;
+      color: var(--text2);
+    }
+
+    .banner-icon {
+      width: 56px; height: 56px;
+      border: 1px solid var(--border2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .banner-icon-inner {
+      width: 22px; height: 22px;
+      border: 1.5px solid var(--text2);
+      clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+    }
+
+    .banner-txt {
+      font-family: 'Oswald', sans-serif;
+      text-align: center;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      line-height: 2;
+      text-transform: uppercase;
+    }
+
+    /* painel de info da investigação */
+    #investigacao-info {
+      display: none;
+      background: var(--bg1);
+      border: 1px solid var(--border2);
+      border-left: 3px solid var(--red);
+      padding: 16px 20px;
+      margin-bottom: 22px;
+      gap: 28px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .info-bloco { min-width: 130px; }
+
+    .info-label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text2);
+      margin-bottom: 4px;
+    }
+
+    .info-val { font-size: 12px; color: var(--amber); }
+
+    /* barra de progresso */
+    #barra-wrap { display: none; margin-bottom: 24px; }
+
+    .barra-label {
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text2);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .barra-bg {
+      height: 3px;
+      background: var(--bg3);
+      overflow: hidden;
+    }
+
+    .barra-fill {
+      height: 100%;
+      background: var(--red);
+      width: 0;
+      transition: width 0.6s ease;
+    }
+
+    /* grid de cards */
+    #ranking-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 14px;
+    }
+
+    .card-suspeito {
+      background: var(--bg1);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(18px);
+      animation: aparecer 0.45s ease forwards;
+    }
+
+    @keyframes aparecer { to { opacity: 1; transform: translateY(0); } }
+
+    .card-suspeito.principal {
+      border-color: var(--red);
+      box-shadow: 0 0 0 1px var(--red), 0 0 20px rgba(204,31,31,0.12);
+    }
+
+    .card-foto {
+      width: 100%;
+      aspect-ratio: 3/4;
+      background: var(--bg2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-foto img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      filter: grayscale(15%);
+      display: block;
+    }
+
+    /* overlay no topo da foto */
+    .card-posicao {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 6px 10px;
+      background: rgba(8,10,12,0.8);
+      font-family: 'Oswald', sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-posicao.p1 { color: var(--red2); }
+    .card-posicao.p2 { color: var(--amber); }
+
+    /* scan de revelação */
+    .card-scan {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--red2), transparent);
+      animation: scan-reveal 0.9s ease forwards;
+    }
+
+    @keyframes scan-reveal { from { top: 0; opacity: 1; } to { top: 100%; opacity: 0; } }
+
+    .card-info {
+      padding: 11px 13px 13px;
+      border-top: 1px solid var(--border);
+    }
+
+    .card-rank-txt {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text2);
+      margin-bottom: 3px;
+    }
+
+    .card-name {
+      font-family: 'Oswald', sans-serif;
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--text0);
+      margin-bottom: 2px;
+    }
+
+    .card-dist { font-size: 10px; color: var(--text2); margin-bottom: 8px; }
+
+    .card-bar-bg { height: 2px; background: var(--bg3); overflow: hidden; }
+
+    .card-bar-fill {
+      height: 100%;
+      background: var(--red);
+      width: 0;
+      transition: width 1.2s cubic-bezier(0.16,1,0.3,1);
+    }
+
+    .card-suspeito.principal .card-bar-fill { background: var(--red2); }
+    .card-suspeito:nth-child(2) .card-bar-fill { background: var(--amber); }
+
+    /* rodapé concluído */
+    #footer-concluido {
+      display: none;
+      margin-top: 28px;
+      padding: 14px 18px;
+      border: 1px solid var(--green);
+      background: rgba(26,171,90,0.05);
+      font-family: 'Oswald', sans-serif;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      color: var(--green);
+      text-align: center;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+<header id="header" style="position:sticky; top:0; z-index:10;">
+  <div class="brasao"><div class="brasao-estrela"></div></div>
+  <div class="header-bloco">
+    <div class="header-dept">FORENSESYS</div>
+    <div class="header-sub">Reconhecimento Facial / AT&amp;T ORL Database</div>
+  </div>
+  <span class="badge-investigador">Painel do Investigador</span>
+
+  <div id="conn-status">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span class="conn-txt" id="conn-txt">Conectando...</span>
+    <div class="sep"></div>
+    <span id="session-clock">--:--:--</span>
+  </div>
+</header>
+
+<div id="main">
+
+  <!-- classificação -->
+  <div class="classificacao">
+    <div class="class-tag">CONFIDENCIAL</div>
+    <div class="class-linha"></div>
+    <div class="class-num" id="num-processo">Sessão Nº — / —</div>
+  </div>
+
+  <!-- aguardando -->
+  <div id="banner-aguardando">
+    <div class="banner-icon"><div class="banner-icon-inner"></div></div>
+    <div class="banner-txt">
+      Aguardando transmissão de dados...<br/>
+      A investigação será iniciada pela testemunha
+    </div>
+  </div>
+
+  <!-- info da investigação -->
+  <div id="investigacao-info">
+    <div class="info-bloco">
+      <div class="info-label">Hora do registro</div>
+      <div class="info-val" id="info-hora">--</div>
+    </div>
+    <div class="info-bloco">
+      <div class="info-label">Olhos</div>
+      <div class="info-val" id="info-olhos">--</div>
+    </div>
+    <div class="info-bloco">
+      <div class="info-label">Nariz</div>
+      <div class="info-val" id="info-nariz">--</div>
+    </div>
+    <div class="info-bloco">
+      <div class="info-label">Boca</div>
+      <div class="info-val" id="info-boca">--</div>
+    </div>
+  </div>
+
+  <!-- barra de progresso -->
+  <div id="barra-wrap">
+    <div class="barra-label">
+      <span>Cruzamento biométrico em andamento</span>
+      <span id="barra-txt">0 / 5 suspeitos</span>
+    </div>
+    <div class="barra-bg">
+      <div class="barra-fill" id="barra-fill"></div>
+    </div>
+  </div>
+
+  <!-- grid de cards -->
+  <div id="ranking-grid"></div>
+
+  <!-- rodapé -->
+  <div id="footer-concluido">
+    ✔ &nbsp; Análise biométrica concluída — laudo forense exportado automaticamente
+  </div>
+
+</div>
+
+<script>
+  // relógio e número de processo
+  var proc = Math.floor(Math.random() * 9000) + 1000
+  var ano  = new Date().getFullYear()
+  document.getElementById('num-processo').textContent =
+    'Sessão Nº ' + proc + ' / ' + ano
+
+  setInterval(function() {
+    document.getElementById('session-clock').textContent =
+      new Date().toLocaleTimeString('pt-BR')
+  }, 1000)
+
+  // WebSocket
+  var socket = io()
+  var connDot = document.getElementById('conn-dot')
+  var connTxt = document.getElementById('conn-txt')
+
+  socket.on('connect', function() {
+    connDot.className = 'conn-dot conectado'
+    connTxt.className = 'conn-txt conectado'
+    connTxt.textContent = 'Conectado'
+  })
+
+  socket.on('disconnect', function() {
+    connDot.className = 'conn-dot erro'
+    connTxt.className = 'conn-txt erro'
+    connTxt.textContent = 'Sem conexão'
+  })
+
+  socket.on('investigacao_iniciada', function(dados) {
+    document.getElementById('banner-aguardando').style.display  = 'none'
+    document.getElementById('footer-concluido').style.display   = 'none'
+    document.getElementById('ranking-grid').innerHTML            = ''
+
+    document.getElementById('investigacao-info').style.display  = 'flex'
+    document.getElementById('barra-wrap').style.display         = 'block'
+
+    document.getElementById('info-hora').textContent  = dados.hora
+    document.getElementById('info-olhos').textContent = dados.olhos === 'Nenhum' ? '—' : dados.olhos
+    document.getElementById('info-nariz').textContent = dados.nariz === 'Nenhum' ? '—' : dados.nariz
+    document.getElementById('info-boca').textContent  = dados.boca  === 'Nenhum' ? '—' : dados.boca
+
+    document.getElementById('barra-fill').style.width = '0'
+    document.getElementById('barra-txt').textContent  = '0 / 5 suspeitos'
+
+    connDot.className = 'conn-dot aguardando'
+    connTxt.className = 'conn-txt aguardando'
+    connTxt.textContent = 'Recebendo dados...'
+  })
+
+  var totalRecebidos = 0
+
+  socket.on('novo_suspeito', function(s) {
+    totalRecebidos++
+
+    var pct = (totalRecebidos / 5) * 100
+    document.getElementById('barra-fill').style.width = pct + '%'
+    document.getElementById('barra-txt').textContent  = totalRecebidos + ' / 5 suspeitos'
+
+    var labels = ['Principal Suspeito', '2º Lugar', '3º Lugar', '4º Lugar', '5º Lugar']
+    var simPct = Math.max(8, Math.round((1 - s.distancia / 120) * 100))
+
+    var card = document.createElement('div')
+    card.className = 'card-suspeito' + (s.posicao === 1 ? ' principal' : '')
+
+    card.innerHTML =
+      '<div class="card-foto">' +
+        (s.foto_url ? '<img src="' + s.foto_url + '" alt=""/>' : '') +
+        '<div class="card-posicao ' + (s.posicao === 1 ? 'p1' : s.posicao === 2 ? 'p2' : '') + '">' +
+          '<span>' + labels[s.posicao - 1] + '</span>' +
+          '<span>#' + s.posicao + '</span>' +
+        '</div>' +
+        '<div class="card-scan"></div>' +
+      '</div>' +
+      '<div class="card-info">' +
+        '<div class="card-rank-txt">Biometria</div>' +
+        '<div class="card-name">Suspeito ' + s.suspeito + '</div>' +
+        '<div class="card-dist">dist. euclidiana: ' + s.distancia + '</div>' +
+        '<div class="card-bar-bg">' +
+          '<div class="card-bar-fill" data-pct="' + simPct + '"></div>' +
+        '</div>' +
+      '</div>'
+
+    document.getElementById('ranking-grid').appendChild(card)
+
+    setTimeout(function() {
+      card.querySelector('.card-bar-fill').style.width = simPct + '%'
+    }, 200)
+  })
+
+  socket.on('investigacao_concluida', function() {
+    totalRecebidos = 0
+    connDot.className = 'conn-dot conectado'
+    connTxt.className = 'conn-txt conectado'
+    connTxt.textContent = 'Conectado'
+    document.getElementById('barra-fill').style.width = '100%'
+    document.getElementById('footer-concluido').style.display = 'block'
+  })
+</script>
+</body>
+</html>
